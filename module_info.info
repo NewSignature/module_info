@@ -1,0 +1,5 @@
+name = "Module Info API"
+description = "Provides an API for quickly creating info hooks"
+core = 7.x
+version = 7.1.x
+package = "Other"

@@ -1,0 +1,114 @@
+<?php 
+
+/**
+ * Invokes all of the callbacks that implement the given info hook and returns a cached
+ * array of info.
+ * 
+ * @param string $hook The name of the hook to invoke.  This is probably something you created
+ *   and unique to your application.
+ * @param array $defaults An array of default values to assign to each info record.
+ * @param string $key Optionally, the key of a single item to return.
+ * 
+ * @return array If $key is specified, returns a single array of info, or false if the 
+ *   key did match anything.   Otherwise, returns a keyed array of info, as returned by the
+ *   info hooks.  
+ *   Each item will contain the following keys, plus any additional keys defined by $defaults:
+ *   - module: The module that defined this item.
+ *   - key: The key of the item (should match the array key)
+ *   - weight: The weight of the item in relation to others.
+ */
+function module_info_invoke_all($hook, $defaults = array(), $key = NULL) { 
+  $info = &drupal_static("hook_$hook");
+  if (!isset($info)) {
+    $info = array();
+    
+    foreach (module_implements($hook) as $module) {
+      $data = module_invoke($module, $hook);
+      
+      foreach ($data as $k => $item) {
+        $info[$k] = $item + array(
+          'module' => $module,
+          'key' => $k,
+          'weight' => count($info),
+        ) + $defaults;
+        
+        if (isset($info[$k]['file'])) {
+          $info[$k]['file'] = drupal_get_path('module', $module) . '/' . $info[$k]['file'];
+        }
+      }
+    }
+    // Let modules alter the info
+    drupal_alter($hook, $info);
+    
+    // Sort by weight
+    uasort($info, 'drupal_sort_weight');
+  }
+  
+  // If a key was given, return just the item with that key.
+  if (!empty($key)) {
+    if (isset($info[$key])) {
+      return $info[$key];
+    }
+    return FALSE;
+  }
+  
+  // Otherwise, return all the items.
+  return $info;
+}
+
+/**
+ * Returns an options list for the given info hook, using the given field as the title.
+ * 
+ * @param array $info The info array, as returned by module_info_invoke_all().
+ * @param string $field The name of the key to use as the title for the options list.
+ */
+function module_info_options($info, $field = 'title') {
+  $options = array();
+  foreach ($info as $key => $data) {
+    if (isset($data[$field])) {
+      $options[$key] = $data[$field];
+    }
+  }
+  return $options;
+}
+
+/**
+ * Gets the name of a callback function defined by one record in an info array.
+ * If the callback function is declared explicitly, it will be returned.
+ * Otherwise, a function will be found with the 'base' property or the module name
+ * as a prefix and the callback function name appended.
+ * 
+ * @param array $data A single item from an info array.
+ * @param string $callback The name of the function to invoke.  This should either be
+ *   an array key in the info properties, or it should be a valid name appended to 
+ *   the base name or module name.
+ */
+function module_info_get_callback($data, $callback = 'callback') {
+  if (isset($data['file'])) {
+    include_once($data['file']);
+  }
+  
+  // If the callback function is explicitly defined an exists, use it.
+  if (isset($data['callbacks'][$callback]) && function_exists($data['callbacks'][$callback])) {
+    return $data['callbacks'][$callback];
+  }
+  if (isset($data[$callback]) && function_exists($data['callback'])) {
+    return $data['callback'];
+  }
+  
+  // If the base is defined and a corresponding function exists, use it.
+  if (isset($data['base'])) {
+    $base = $data['base'];
+  }
+  elseif (isset($data['module'])) {
+    $base = $data['module'];
+  }
+  
+  if (!empty($base)) {
+    $func = "{$base}_{$callback}";
+    if (function_exists($func)) {
+      return $func;
+    }
+  }
+  return FALSE;
+}
