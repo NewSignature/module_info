@@ -32,8 +32,12 @@ function module_info_invoke_all($hook, $defaults = array(), $key = NULL) {
           'weight' => count($info),
         ) + $defaults;
         
+        $path = drupal_get_path('module', $module);
         if (isset($info[$k]['file'])) {
-          $info[$k]['file'] = drupal_get_path('module', $module) . '/' . $info[$k]['file'];
+          $info[$k]['file'] = $path . '/' . $info[$k]['file'];
+        }
+        elseif (file_exists("$path/$module.pseudo.inc")) {
+          $info[$k]['file'] = "$path/$module.pseudo.inc";
         }
       }
     }
